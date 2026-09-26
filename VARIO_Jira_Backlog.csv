@@ -1,0 +1,686 @@
+Issue Key,Summary,Issue Type,Parent (Epic),Slice ID,Sprint,Priority,Assignee,Team,Labels,Story Points,Description
+SCRUM-5,EPIC-1: Deployed Walking Skeleton & CD Pipeline,Epic,,,Sprint 1,Medium,Rohith G.S,VARIO Program,epic,,
+SCRUM-6,EPIC-2: Role Packs & Read Flows,Epic,,,Sprint 2,Medium,Rohith G.S,VARIO Program,epic,,
+SCRUM-7,EPIC-3: Write Workflows + Admin + Voice,Epic,,,Sprint 3,Medium,Rohith G.S,VARIO Program,epic,,
+SCRUM-8,EPIC-4: Cross-cutting Services + Harden + Demo,Epic,,,Sprint 4,Medium,Rohith G.S,VARIO Program,epic,,
+SCRUM-9,slice-01-auth-login,Task,EPIC-1: Deployed Walking Skeleton & CD Pipeline,slice-01,Sprint 1,Medium,Mohammed Tahir Siddique,Platform — Tahir,module-auth;needs-human-review;secrets;ui-facing;owner-d,5,"WHAT TO BUILD:
+- Mock Auth Service (FastAPI) pre-seeded with test users incl. one admin per role pack
+- AuthAdapter.authenticate(email, password) — only code that knows it's a mock
+- POST /api/auth/login — validates via adapter, upserts users table, issues signed JWT
+- JWT helpers: issue_token(user), verify_token(token)
+- Login page (Next.js): email/password, Log in button, 'contact admin' text, VARIO branding
+
+ACCEPTANCE CRITERIA (convert to checklist in Jira):
+[] Correct creds -> 200 with {user_id,email,full_name,role,external_id,token}
+[] Wrong creds -> 401 with error envelope
+[] First-ever login creates exactly one users row
+[] Repeat login updates the same users row (no duplicate)
+[] JWT decodes to {user_id, role, email}; rejected by verify_token after JWT_EXPIRY_MINUTES
+[] Mock Auth Service pre-seeded with >=1 end_user and one admin per role pack
+[] Login page shows loading state and redirects to Home on success
+[] Invalid creds shows 'Invalid email or password'; no account-locked state
+
+OUT OF SCOPE:
+- Registration, email verification, password reset, account lockout
+- Real identity-provider integration (mock only)
+- Protected-route JWT middleware and rate limiting (slice-03)
+- Sessions, conversations, chat
+
+MOCKUP / REFERENCE: docs/design/login.html
+
+HUMAN REVIEW REQUIRED: Yes"
+SCRUM-10,slice-02-db-schema,Task,EPIC-1: Deployed Walking Skeleton & CD Pipeline,slice-02,Sprint 1,Medium,Mohammed Tahir Siddique,Platform — Tahir,module-db-schema;needs-human-review;secrets;owner-d,5,"WHAT TO BUILD:
+- SQLAlchemy models for all 9 entities
+- Alembic migration (up/down)
+- DB session/engine wiring reading DATABASE_URL
+- Seed-runner scaffold (empty hooks for role-pack slices)
+
+ACCEPTANCE CRITERIA (convert to checklist in Jira):
+[] Migration up creates all 9 tables with correct columns/types; down drops cleanly
+[] Migration succeeds against a Neon database via DATABASE_URL
+[] FKs enforced: conversations->users, messages->conversations, sessions->conversations (1:1), training_phrases->intents, response_variants->response_templates, audit_log->users
+[] JSONB columns exist for messages.entities, sessions.slots, audit_log.details; response_templates.available_variables is a string array
+[] Enum/check constraints: messages.sender in {user,bot}; intents.intent_type in {dynamic_workflow,static_faq}; role_pack in {hr,it,admissions}
+[] Backend connects via DATABASE_URL with no hardcoded credentials
+[] No auth_tokens table (removed per ADR-001)
+
+OUT OF SCOPE:
+- Seeding role-pack intents/phrases/templates (each role owner's own slice)
+- Business logic, CRUD endpoints beyond the migration
+- Provisioning the Neon instance itself (slice-30)
+
+MOCKUP / REFERENCE: No UI surface
+
+HUMAN REVIEW REQUIRED: Yes"
+SCRUM-11,slice-27-docker-compose,Task,EPIC-1: Deployed Walking Skeleton & CD Pipeline,slice-27,Sprint 1,Highest,Mohammed Tahir Siddique,Platform — Tahir,module-infra-docker;light-review;infra;owner-d,5,"WHAT TO BUILD:
+- docker-compose.yml: frontend, gateway, rasa-hr/it/admissions, mock-auth/hrms/itsm/admissions, postgres
+- Dockerfile for frontend and backend at minimum; stub images ok for Rasa/mocks
+- Env wiring via .env matching .env.example
+- README 'Local development' section documenting docker compose up and ports
+
+ACCEPTANCE CRITERIA (convert to checklist in Jira):
+[] docker compose up starts and keeps Postgres, backend, frontend healthy
+[] Backend connects to postgres via DATABASE_URL; frontend reaches backend via NEXT_PUBLIC_API_BASE_URL
+[] All stack services (3 Rasa + 4 mocks) are declared (stub images allowed)
+[] No secret values hardcoded — everything from .env (gitignored)
+[] README documents boot steps and ports
+
+OUT OF SCOPE:
+- Production orchestration on OCI (slice-29)
+- CI/CD (slice-28)
+- Kubernetes / non-Compose orchestrator
+
+MOCKUP / REFERENCE: No UI surface
+
+HUMAN REVIEW REQUIRED: Light"
+SCRUM-12,slice-28-cicd,Task,EPIC-1: Deployed Walking Skeleton & CD Pipeline,slice-28,Sprint 1,High,Rohith G.S,IT — Rohith,module-infra-cicd;needs-human-review;secrets;infra;owner-b,5,"WHAT TO BUILD:
+- ci.yml (on PR): install, lint, pytest, Jest/RTL, build both
+- deploy.yml (on push to main): deploy backend to OCI target, frontend to Vercel
+- Branch protection on main: require CI pass + PR review
+- All credentials from GitHub Actions secrets, nothing committed
+
+ACCEPTANCE CRITERIA (convert to checklist in Jira):
+[] PR opened/updated -> CI runs pytest+Jest+lint+build; failing check blocks merge
+[] main branch protection requires passing CI + >=1 review
+[] Merge to main triggers deploy workflow -> frontend to Vercel, backend to OCI
+[] A trivial visible change merged to main appears on the live production URL
+[] Every credential/token read from GitHub Actions secrets; none in repo
+
+OUT OF SCOPE:
+- Provisioning the deploy targets themselves (slice-29, slice-30)
+- SonarQube/static-analysis gate (note as follow-up only)
+- Coverage thresholds, blue/green or canary deploys
+
+MOCKUP / REFERENCE: No UI surface
+
+HUMAN REVIEW REQUIRED: Yes"
+SCRUM-13,slice-29-oci-cloudflare,Task,EPIC-1: Deployed Walking Skeleton & CD Pipeline,slice-29,Sprint 1,Highest,PAVAN KISHOR M,HR — Kishor,module-infra-hosting;needs-human-review;secrets;infra;owner-a,5,"WHAT TO BUILD:
+- Provisioned OCI Ampere A1 VM (Always-Free) with Docker installed
+- Backend stack running on it via compose prod profile
+- Cloudflare Tunnel mapping a stable public hostname -> backend, HTTPS termination
+- Persistence across reboot via systemd units / restart policies
+- docs/deploy-backend.md documenting host, tunnel hostname, and how CI deploys
+
+ACCEPTANCE CRITERIA (convert to checklist in Jira):
+[] Backend reachable at a stable HTTPS URL via Cloudflare Tunnel
+[] Instance reboot -> backend stack and tunnel restart automatically
+[] No public inbound ports beyond what the tunnel requires
+[] CI/CD deploy workflow can push a new build using only GitHub Actions secrets
+[] Deploy docs let a teammate find host/tunnel details with no secrets in the doc
+
+OUT OF SCOPE:
+- Frontend hosting (Vercel) and database (Neon) — slice-30
+- The CI/CD workflows themselves (slice-28)
+- Autoscaling, multi-node, load balancing
+
+MOCKUP / REFERENCE: No UI surface
+
+HUMAN REVIEW REQUIRED: Yes"
+SCRUM-14,slice-30-vercel-neon,Task,EPIC-1: Deployed Walking Skeleton & CD Pipeline,slice-30,Sprint 1,High,Mitesh,Admissions — Mitesh,module-infra-hosting;needs-human-review;secrets;infra;owner-c,5,"WHAT TO BUILD:
+- Vercel project linked to repo, NEXT_PUBLIC_API_BASE_URL pointing at Cloudflare-tunneled backend
+- Neon project with separate dev and prod databases/branches + connection strings
+- Env wiring: DATABASE_URL to backend/migrations; Vercel env vars for frontend
+- Confirm .env.example lists every variable introduced
+
+ACCEPTANCE CRITERIA (convert to checklist in Jira):
+[] Frontend deployed on Vercel loads and calls backend over HTTPS
+[] Neon has a dev and a prod database, each with a connection string
+[] Connection strings provided to backend/CI only as secrets, never committed
+[] Merge to main auto-deploys frontend to Vercel (via slice-28)
+[] .env.example accurately reflects every required env var
+
+OUT OF SCOPE:
+- Backend hosting / Cloudflare Tunnel (slice-29)
+- Database schema and migrations (slice-02)
+- CI/CD workflow definitions (slice-28)
+
+MOCKUP / REFERENCE: No UI surface
+
+HUMAN REVIEW REQUIRED: Yes"
+SCRUM-15,slice-03-gateway-envelope,Task,EPIC-2: Role Packs & Read Flows,slice-03,Sprint 2,Medium,Mohammed Tahir Siddique,Platform — Tahir,module-gateway;needs-human-review;secrets;owner-d,5,"WHAT TO BUILD:
+- Envelope wrapper: every response shaped {status,data,error}
+- JWT auth middleware verifying Bearer token via verify_token; attaches user context; 401 on invalid
+- Error handling mapping exceptions to documented HTTP codes
+- Request validation via Pydantic -> 422 on malformed bodies
+- Rate limiting per endpoint group with 429 + X-RateLimit-* headers
+- Integrate POST /api/auth/login under envelope + rate limiting
+- /health endpoint
+
+ACCEPTANCE CRITERIA (convert to checklist in Jira):
+[] Any endpoint response body is {status,data,error}
+[] Protected route with no/invalid JWT -> 401 in envelope form
+[] Valid JWT -> user_id, role, email available to handler
+[] Malformed request body -> 422 in envelope form
+[] Over rate limit -> 429 with X-RateLimit-Limit/Remaining/Reset headers
+[] /api/auth/login requires no auth, limited to 10/min per IP
+[] Gateway contains no business logic — only validation, auth, rate limiting, envelope, dispatch
+
+OUT OF SCOPE:
+- Chat, conversation, admin business logic (own slices)
+- Role-based authorization on admin routes (Sprint 3)
+- TTS / talk mode
+
+MOCKUP / REFERENCE: No UI surface
+
+HUMAN REVIEW REQUIRED: Yes"
+SCRUM-16,slice-04-conversation-store,Task,EPIC-2: Role Packs & Read Flows,slice-04,Sprint 2,Medium,Mohammed Tahir Siddique,Platform — Tahir,module-conversation-store;ui-facing;owner-d,5,"WHAT TO BUILD:
+- GET /api/conversations — caller's conversations, most recent first, with filters
+- POST /api/conversations — create with role_pack (required), optional title
+- GET /api/conversations/:id/messages — owner-only, paginated
+- Home page: sidebar list, New Conversation button, empty/loading states
+- New Conversation page/modal: 3 role-pack cards (HR/IT/Admissions)
+
+ACCEPTANCE CRITERIA (convert to checklist in Jira):
+[] GET /api/conversations returns only caller's own conversations, most recent first, with preview+timestamp
+[] role_pack/status query params filter the list
+[] POST with valid role_pack -> 201; invalid role_pack -> 422
+[] No title given -> placeholder title auto-generated
+[] GET messages as owner -> 200; non-owner -> 403; missing id -> 404
+[] Home page renders loaded/empty/loading states
+[] Clicking a role-pack card creates a conversation and navigates to Chat View
+
+OUT OF SCOPE:
+- Sending messages / chat pipeline / bot message rendering (slice-05)
+- Admin-wide conversation logs (slice-11)
+- Talk mode
+
+MOCKUP / REFERENCE: docs/design/home-conversation-list.html, docs/design/new-conversation.html
+
+HUMAN REVIEW REQUIRED: No"
+SCRUM-17,slice-05-chat-core,Task,EPIC-2: Role Packs & Read Flows,slice-05,Sprint 2,Medium,Mohammed Tahir Siddique,Platform — Tahir,module-session-manager;module-dialogue-router;module-response-renderer;ui-facing;owner-d,5,"WHAT TO BUILD:
+- session-manager: load-or-create sessions row (current_form, current_step, slots, expires_at); Postgres authoritative
+- dialogue-router: reads role_pack, forwards to correct RASA_*_URL, no NLU logic itself
+- response-renderer: given template_key + slots, picks a random variant and substitutes placeholders
+- POST /api/chat (chat mode): persist user msg -> route -> Rasa -> render -> persist bot msg -> update session -> return response
+- Below-confidence-threshold -> clarification prompt, not a workflow (FR-2); log every classification/routing decision (FR-5)
+- Chat View shell: header, scrollable thread, input bar; states active/loading/empty/error
+- Shared message component library: plain text, data card, slot prompt, confirmation, result, not-found, FAQ answer, error, list
+
+ACCEPTANCE CRITERIA (convert to checklist in Jira):
+[] POST /api/chat (chat mode) returns 200 with response_text, intent, confidence, entities, session{current_form,current_step,slots}
+[] Non-owner -> 403; missing conversation -> 404; missing message -> 422
+[] Multi-turn exchange persists session slots across turns in Postgres (FR-4)
+[] Below-threshold confidence -> clarification prompt instead of a workflow (FR-2)
+[] Any message -> classification+routing decision written to the log (FR-5)
+[] Router forwards to the matching Rasa instance per conversation's role_pack, and no other
+[] Renderer returns one variant at random with slot values substituted, given a template_key with variants
+[] All 9 bot message types render from props in Storybook
+[] Chat View renders active, loading, empty, and error states
+
+OUT OF SCOPE:
+- Talk mode / TTS (slice-06) — keep mode field, don't hardcode chat-only
+- Role-specific card content (built in read-flow slices)
+- Admin console
+
+MOCKUP / REFERENCE: docs/design/chat-view.html
+
+HUMAN REVIEW REQUIRED: No"
+SCRUM-18,slice-12-hr-rasa,Task,EPIC-2: Role Packs & Read Flows,slice-12,Sprint 2,Medium,PAVAN KISHOR M,HR — Kishor,module-role-pack-runtime;owner-a,5,"WHAT TO BUILD:
+- Rasa project for HR (config.yml, domain.yml, nlu.yml, rules/stories, actions.py) at RASA_HR_URL
+- Seed intents (role_pack=hr): check_leave_balance (dynamic_workflow) + placeholders for ask_leave_status, submit_leave_request, ask_policy_faq
+- ~30-50 training phrases for check_leave_balance; a handful for others
+- nlu_fallback policy for low-confidence utterances
+- Custom action skeleton action_check_leave_balance returning template_key + slots
+- response_templates seeded for leave-balance response with {total}/{casual}/{sick}/{earned} placeholders
+
+ACCEPTANCE CRITERIA (convert to checklist in Jira):
+[] HR Rasa service reachable at RASA_HR_URL on start
+[] Variations of 'what's my leave balance' classify check_leave_balance with high confidence
+[] Off-topic message fires nlu_fallback
+[] DB contains HR dynamic-workflow intent(s) with training phrases and a leave-balance response template
+[] action_check_leave_balance exists and returns a template_key + slots shape
+
+OUT OF SCOPE:
+- HRMS mock + adapter (slice-13)
+- End-to-end leave-balance card + real adapter call (slice-14)
+- Full guided leave-request form (slice-15) and policy FAQ content (slice-16)
+- IT and Admissions role packs
+
+MOCKUP / REFERENCE: No UI surface (Rasa runtime)
+
+HUMAN REVIEW REQUIRED: No"
+SCRUM-19,slice-13-hrms-adapter,Task,EPIC-2: Role Packs & Read Flows,slice-13,Sprint 2,Medium,PAVAN KISHOR M,HR — Kishor,module-integration-adapters;owner-a,5,"WHAT TO BUILD:
+- Mock HRMS (FastAPI) at MOCK_HRMS_URL — seeded employees, casual/sick/earned balances, leave records, HR policies
+- HRMSAdapter: get_leave_balance, get_leave_status, submit_leave(employee_id,type,start,end,reason)
+- Typed errors: unknown employee -> not-found result; mock unreachable -> typed backend-unavailable error
+- Optional artificial delay flag on the mock
+
+ACCEPTANCE CRITERIA (convert to checklist in Jira):
+[] Mock HRMS seeded with several employees each having casual/sick/earned balances on start
+[] get_leave_balance for a seeded employee_id returns structured balance (total + breakdown)
+[] Unknown employee_id -> not-found result (no crash)
+[] Mock service down -> adapter raises typed backend-unavailable error promptly
+[] No code outside the adapter references mock-specific details (swappable later)
+
+OUT OF SCOPE:
+- Rasa wiring / chat card (slice-12, slice-14)
+- Leave-request confirmation flow UI (slice-15)
+- Other adapters and real HRMS integration
+
+MOCKUP / REFERENCE: No UI surface
+
+HUMAN REVIEW REQUIRED: No"
+SCRUM-20,slice-14-hr-leave-balance,Task,EPIC-2: Role Packs & Read Flows,slice-14,Sprint 2,Medium,PAVAN KISHOR M,HR — Kishor,module-hr-role-pack;ui-facing;owner-a,5,"WHAT TO BUILD:
+- Complete action_check_leave_balance calling HRMSAdapter.get_leave_balance, filling slots, returning template_key+slots
+- Seed leave-balance response_template + variants ({total},{casual},{sick},{earned})
+- HR leave-balance data card composing shared data-card component
+- Verify full path: gateway -> chat-core -> dialogue-router -> Rasa-HR -> HRMSAdapter -> Mock HRMS -> response-renderer -> card
+
+ACCEPTANCE CRITERIA (convert to checklist in Jira):
+[] Employee asks leave balance in natural language -> data card renders total + casual/sick/earned breakdown
+[] Persisted bot message records intent_name=check_leave_balance and a confidence
+[] Employee with no HRMS record -> graceful message (no crash, no empty card)
+[] Repeated asks vary wording (renderer picks a random variant)
+[] Merge to main -> working flow visible in the deployed app
+
+OUT OF SCOPE:
+- Leave-request submission / multi-turn form (slice-15)
+- Policy FAQ (slice-16)
+- Voice / talk mode
+
+MOCKUP / REFERENCE: docs/design/chat-view.html
+
+HUMAN REVIEW REQUIRED: No"
+SCRUM-21,slice-17-it-rasa,Task,EPIC-2: Role Packs & Read Flows,slice-17,Sprint 2,Medium,Rohith G.S,IT — Rohith,module-role-pack-runtime;owner-b,5,"WHAT TO BUILD:
+- Rasa project for IT at RASA_IT_URL
+- Seed intents (role_pack=it): check_ticket_status (dynamic_workflow) + placeholders for raise_ticket, reset_password
+- ~30-50 training phrases for check_ticket_status (with ticket_id entity); a handful for others
+- nlu_fallback policy
+- Custom action skeleton action_check_ticket_status returning template_key + slots
+- response_templates seeded with {ticket_id}/{status} placeholders
+
+ACCEPTANCE CRITERIA (convert to checklist in Jira):
+[] IT Rasa service reachable at RASA_IT_URL on start
+[] Variations of 'what's the status of my ticket TKT-1234' classify check_ticket_status and extract ticket_id
+[] Off-topic message fires nlu_fallback
+[] DB contains IT dynamic-workflow intent(s) with training phrases and a ticket-status response template
+[] action_check_ticket_status exists and returns a template_key + slots shape
+
+OUT OF SCOPE:
+- ITSM mock + adapter (slice-18)
+- End-to-end ticket-status card (slice-20), ticket creation+dedupe (slice-19), password reset (slice-21)
+- HR and Admissions role packs
+
+MOCKUP / REFERENCE: No UI surface (Rasa runtime)
+
+HUMAN REVIEW REQUIRED: No"
+SCRUM-22,slice-18-itsm-adapter,Task,EPIC-2: Role Packs & Read Flows,slice-18,Sprint 2,Medium,Rohith G.S,IT — Rohith,module-integration-adapters;owner-b,5,"WHAT TO BUILD:
+- Mock ITSM (FastAPI) at MOCK_ITSM_URL — seeded tickets, employees with stored security question/answer
+- ITSMAdapter: get_ticket_status, create_ticket, verify_identity(employee_id,answer), reset_password(employee_id)
+- Typed errors: unknown ticket id -> not-found; mock down -> typed backend-unavailable error
+
+ACCEPTANCE CRITERIA (convert to checklist in Jira):
+[] Mock ITSM seeded with several tickets and employees-with-security-questions on start
+[] get_ticket_status for a seeded ticket_id returns status + enough fields for a status card
+[] Unknown ticket_id -> not-found result (no crash)
+[] Mock down -> adapter raises typed backend-unavailable error promptly
+[] create_ticket, verify_identity, reset_password implemented and callable (exercised in slice-19/21)
+
+OUT OF SCOPE:
+- Rasa wiring / chat cards (slice-17, slice-20)
+- Ticket-creation dedupe (slice-19), password-reset flow (slice-21)
+- Other adapters and real ITSM integration
+
+MOCKUP / REFERENCE: No UI surface
+
+HUMAN REVIEW REQUIRED: No"
+SCRUM-23,slice-20-it-ticket-status,Task,EPIC-2: Role Packs & Read Flows,slice-20,Sprint 2,Medium,Rohith G.S,IT — Rohith,module-it-role-pack;ui-facing;owner-b,5,"WHAT TO BUILD:
+- Complete action_check_ticket_status: read ticket_id entity, call ITSMAdapter.get_ticket_status, return template_key+slots
+- Seed ticket-status response_template + variants using {ticket_id}/{status}
+- IT ticket-status card via shared data-card component; not-found component for invalid ticket id
+- Verify full path in the deployed app
+
+ACCEPTANCE CRITERIA (convert to checklist in Jira):
+[] Valid ticket id -> status card renders with ticket id and status
+[] Unknown/invalid ticket id -> not-found message with guidance (not an error/crash) (FR-11)
+[] Persisted bot message records intent_name=check_ticket_status and a confidence
+[] Repeated asks vary wording (random variant)
+[] Merge to main -> working flow visible in the deployed app
+
+OUT OF SCOPE:
+- Ticket creation + duplicate suppression (slice-19)
+- Password reset (slice-21)
+- Voice / talk mode
+
+MOCKUP / REFERENCE: docs/design/chat-view.html
+
+HUMAN REVIEW REQUIRED: No"
+SCRUM-24,slice-22-adm-rasa,Task,EPIC-2: Role Packs & Read Flows,slice-22,Sprint 2,Medium,Mitesh,Admissions — Mitesh,module-role-pack-runtime;owner-c,5,"WHAT TO BUILD:
+- Rasa project for Admissions at RASA_ADMISSIONS_URL
+- Seed intents (role_pack=admissions): check_application_status (dynamic_workflow) + placeholders for get_document_checklist, ask_fee_deadline
+- ~30-50 training phrases for check_application_status with application_id entity; a handful for others
+- nlu_fallback policy
+- Custom action skeleton action_check_application_status returning template_key + slots
+- response_templates seeded with {application_id}/{status} placeholders
+
+ACCEPTANCE CRITERIA (convert to checklist in Jira):
+[] Admissions Rasa service reachable at RASA_ADMISSIONS_URL on start
+[] Variations of 'what's the status of application APP-1001' classify check_application_status and extract application_id
+[] Off-topic message fires nlu_fallback
+[] DB contains Admissions dynamic-workflow intent(s) with training phrases and an application-status response template
+[] action_check_application_status exists and returns a template_key + slots shape
+
+OUT OF SCOPE:
+- Admissions mock + adapter (slice-23)
+- End-to-end application-status card (slice-24), document checklist (slice-25), fee/deadline calendar (slice-26)
+- HR and IT role packs
+
+MOCKUP / REFERENCE: No UI surface (Rasa runtime)
+
+HUMAN REVIEW REQUIRED: No"
+SCRUM-25,slice-23-adm-adapter,Task,EPIC-2: Role Packs & Read Flows,slice-23,Sprint 2,Medium,Mitesh,Admissions — Mitesh,module-integration-adapters;owner-c,5,"WHAT TO BUILD:
+- Mock Admissions (FastAPI) at MOCK_ADMISSIONS_URL — seeded applications, per-program document checklists, one configurable calendar
+- AdmissionsAdapter: get_application_status, get_document_checklist(program), get_calendar()
+- Typed errors: unknown application id -> not-found w/ suggested next step; mock down -> typed backend-unavailable error
+
+ACCEPTANCE CRITERIA (convert to checklist in Jira):
+[] Mock Admissions seeded with several applications, per-program checklists, and one calendar on start
+[] get_application_status for a seeded application_id returns status + a suggested next step
+[] Unknown application_id -> not-found result carrying a suggested next step (FR-17)
+[] Mock down -> adapter raises typed backend-unavailable error promptly
+[] get_document_checklist and get_calendar implemented and callable (exercised in slice-25/26)
+
+OUT OF SCOPE:
+- Rasa wiring / chat cards (slice-22, slice-24)
+- Checklist list UI (slice-25), fee/deadline flow (slice-26)
+- Other adapters and real Admissions integration
+
+MOCKUP / REFERENCE: No UI surface
+
+HUMAN REVIEW REQUIRED: No"
+SCRUM-26,slice-24-adm-app-status,Task,EPIC-2: Role Packs & Read Flows,slice-24,Sprint 2,Medium,Mitesh,Admissions — Mitesh,module-admissions-role-pack;ui-facing;owner-c,5,"WHAT TO BUILD:
+- Complete action_check_application_status: read application_id entity, call AdmissionsAdapter.get_application_status, return template_key+slots
+- Seed application-status response_template + variants using {application_id}/{status}
+- Admissions status card via shared data-card component; not-found component with suggested next step (FR-17)
+- Verify full path in the deployed app
+
+ACCEPTANCE CRITERIA (convert to checklist in Jira):
+[] Valid application status request -> status card renders with status + next step
+[] Unknown application id -> graceful not-found with a suggested next step (FR-17), no crash
+[] Persisted bot message records intent_name=check_application_status and a confidence
+[] Repeated asks vary wording (random variant)
+[] Merge to main -> working flow visible in the deployed app
+
+OUT OF SCOPE:
+- Document checklist (slice-25) and fee/deadline calendar (slice-26)
+- Voice / talk mode
+
+MOCKUP / REFERENCE: docs/design/chat-view.html
+
+HUMAN REVIEW REQUIRED: No"
+SCRUM-27,slice-06-talk-mode,Task,EPIC-3: Write Workflows + Admin + Voice,slice-06,Sprint 3,Medium,Mohammed Tahir Siddique,Platform — Tahir,module-tts-service;needs-human-review;secrets;ui-facing;owner-d,5,"WHAT TO BUILD:
+- tts-service wraps Google Cloud TTS (Neural2); returns a flag instead of throwing on failure
+- Extend POST /api/chat for mode:'talk' — return response_text + audio_base64 + audio_content_type + tts_available
+- Talk Mode UI overlay: mic idle/listening/processing states, Web Speech STT to input bar, auto-send
+- Bot responses auto-play as audio; speaker icon replays; hands-free auto-restart loop
+- 'Talk mode unavailable' banner + 'Switch to text' when tts_available is false
+- Text input remains usable if browser lacks Web Speech API
+
+ACCEPTANCE CRITERIA (convert to checklist in Jira):
+[] mode:'talk' request with TTS available -> response includes audio_base64, audio_content_type, tts_available:true
+[] TTS credits exhausted/failure -> tts_available:false, audio_base64:null, text reply still returned (no crash)
+[] Tapping mic and speaking -> transcript in input bar, auto-sends when user stops
+[] Bot reply in talk mode auto-plays audio; speaker icon replays it
+[] Audio playback finishes -> STT auto-restarts (hands-free loop continues)
+[] tts_available:false -> 'Talk mode unavailable' banner with 'Switch to text' shown
+[] Browser without Web Speech API -> text chat still works
+
+OUT OF SCOPE:
+- Server-side STT (browser does STT)
+- Multi-language voices / voice-selection UI
+- Changing the chat-mode contract (slice-05) beyond adding talk-mode fields
+
+MOCKUP / REFERENCE: docs/design/talk-mode.html
+
+HUMAN REVIEW REQUIRED: Yes"
+SCRUM-28,slice-07-admin-shell,Task,EPIC-3: Write Workflows + Admin + Voice,slice-07,Sprint 3,Medium,Mohammed Tahir Siddique,Platform — Tahir,module-admin-shell;module-audit-log;needs-human-review;ui-facing;owner-d,5,"WHAT TO BUILD:
+- Admin authorization: admin routes require admin role claim; scoped to own role pack (HR admin gets 403 on IT/Admissions data)
+- Admin layout & nav: top bar (name+role badge+logout), side nav (Intent Mgmt, Retraining, Audit Log, Conversation Logs)
+- Intent List page framework: table shell, type badges, needs-retrain badge, retrain-status banner
+- audit-log service: write-only sink {actor_id, role_pack, action_type, reference_id, details}, fire-and-forget
+- GET /api/admin/audit-log scoped to admin's role pack, filters + pagination
+- Audit Log page: filter bar, results table with expandable JSONB details, pagination
+
+ACCEPTANCE CRITERIA (convert to checklist in Jira):
+[] Non-admin JWT on any /api/admin/* route -> 403
+[] hr_admin sees HR-only nav/headers; reading IT/Admissions admin data -> 403
+[] Business event via audit-log sink -> audit_log row appended with actor, role_pack, action_type, reference_id, details
+[] GET /api/admin/audit-log returns only the admin's role-pack entries, honouring filters/pagination, in envelope form
+[] Intent List page renders role-pack's intents with type badges, retrain-status banner, Delete disabled for Dynamic Workflows; empty/loading states render
+[] Audit Log page: filter bar, expandable-detail table, and pagination work
+
+OUT OF SCOPE:
+- Intent/phrase/template/variant CRUD + Create/Edit Intent page (slice-08)
+- Rephraser / Generate Similar (slice-09), retraining (slice-10), conversation logs (slice-11)
+
+MOCKUP / REFERENCE: docs/design/admin-intent-list.html, docs/design/admin-audit-log.html
+
+HUMAN REVIEW REQUIRED: Yes"
+SCRUM-29,slice-08-admin-intent-crud,Task,EPIC-3: Write Workflows + Admin + Voice,slice-08,Sprint 3,Medium,Mohammed Tahir Siddique,Platform — Tahir,module-admin-crud;ui-facing;owner-d,5,"WHAT TO BUILD:
+- Endpoints: GET/POST/PUT/DELETE /api/admin/intents[/:id], GET/PUT /api/admin/templates[/:id], PUT/DELETE /api/admin/variants/:id
+- Business rules: FAQ create -> static_faq, empty available_variables, needs_retrain:true, 409 on duplicate name, 422 on validation
+- PUT rename of dynamic_workflow -> 403; DELETE only static_faq (dynamic -> 403)
+- Variant PUT -> 422 if placeholders missing; variant DELETE -> 400 on the original (index 0)
+- RephraserClient interface + passthrough default (stores original base_text as variant index 0, no generated variants)
+- Create/Edit Intent page: Mode A (dynamic workflow, read-only key+vars) and Mode B (static FAQ)
+- Shared: training-phrases add/delete + Generate Similar (stubbed), Allow rephrasing toggle + variant list, Save/Cancel
+
+ACCEPTANCE CRITERIA (convert to checklist in Jira):
+[] Admin creates FAQ -> stored as static_faq w/ empty available_variables, needs_retrain:true; duplicate name -> 409; missing name/phrases -> 422
+[] PUT renaming a dynamic_workflow -> 403; renaming a static_faq succeeds
+[] DELETE on static_faq deletes intent+phrases+template+variants; on dynamic_workflow -> 403
+[] Variant PUT dropping a base-template placeholder -> 422; variant DELETE on index 0 -> 400
+[] Admin op on another role pack's resource -> 403
+[] Create/Edit Intent page: Mode A shows read-only key+variable badges+unknown-variable warning; Mode B shows validated name+variable-free textarea
+[] CRUD works end-to-end with the passthrough rephraser client; swaps to real generation (slice-09) with no contract change
+
+OUT OF SCOPE:
+- Real LLM variant generation and 'Generate Similar' phrase generation (slice-09)
+- Retraining (slice-10)
+
+MOCKUP / REFERENCE: docs/design/admin-create-edit-intent.html
+
+HUMAN REVIEW REQUIRED: No"
+SCRUM-30,slice-09-rephraser,Task,EPIC-4: Cross-cutting Services + Harden + Demo,slice-09,Sprint 4,Medium,PAVAN KISHOR M,HR — Kishor,module-rephraser-service;needs-human-review;secrets;ui-facing;owner-a,5,"WHAT TO BUILD:
+- Provider-agnostic service behind swappable interface; provider via REPHRASER_PROVIDER (default gemini)
+- Response-variant generation on intent create/template save: 4 paraphrases, placeholders preserved/validated, original+valid variants stored
+- Training-phrase generation via POST /api/admin/intents/:id/generate-phrases, ~8 phrases, not auto-saved
+- UI wiring: Generate-Similar review list (accept/edit/reject/accept-all), variant editor from slice-08
+- Graceful failure: LLM failure/timeout keeps original variant, surfaces clear error, no blocked save
+
+ACCEPTANCE CRITERIA (convert to checklist in Jira):
+[] Template save with allow_rephrasing -> response contains original + up to 4 generated variants, all preserving base placeholders (US-9)
+[] Variant with dropped/renamed placeholder -> rejected, not stored
+[] PUT template -> old variants replaced with newly generated ones
+[] POST generate-phrases -> ~8 seed-based phrases returned, not auto-saved (US-8); no seed phrases -> 422
+[] Accepted phrases saved via PUT intents/:id (training_phrases.add) persist
+[] REPHRASER_PROVIDER selects provider via env with no code change; key read from env, never hardcoded
+[] LLM failure -> save keeps original variant and reports the error (no crash)
+
+OUT OF SCOPE:
+- Retraining (slice-10) — generating variants/phrases only flags needs_retrain, does not retrain
+- Deep implementation of non-Gemini providers (interface + Gemini only; others pluggable later)
+
+MOCKUP / REFERENCE: docs/design/admin-create-edit-intent.html
+
+HUMAN REVIEW REQUIRED: Yes"
+SCRUM-31,slice-10-retraining,Task,EPIC-4: Cross-cutting Services + Harden + Demo,slice-10,Sprint 4,Medium,Rohith G.S,IT — Rohith,module-retraining-service;ui-facing;owner-b,5,"WHAT TO BUILD:
+- retraining-service: reads intents+phrases for role pack, converts to Rasa YAML, runs rasa train, reloads live instance, clears needs_retrain
+- POST /api/admin/retrain — role pack derived from JWT, returns 202 + retrain_job_id
+- GET /api/admin/retrain/:job_id — returns state (pending|training|complete|failed), timestamps, error_message
+- Retraining page: model name, last-trained timestamp, status, Retrain Now button, progress, estimated time, error display
+
+ACCEPTANCE CRITERIA (convert to checklist in Jira):
+[] Admin triggers POST /api/admin/retrain -> 202 with a job id; role pack taken from JWT, body value cannot retrain another pack
+[] Retrain job builds Rasa YAML from that pack's intents/phrases, runs rasa train, reloads the live Rasa instance
+[] Completed retrain -> needs_retrain cleared for that pack's intents
+[] GET retrain/:job_id reports correct state through pending -> training -> complete (or failed w/ message)
+[] Static FAQ created earlier (slice-16) + retrain -> bot recognises the new FAQ afterward, no code change/redeploy (FR-3)
+[] Retraining page shows status/progress and surfaces failures
+
+OUT OF SCOPE:
+- Automatic/scheduled retraining (manual trigger only)
+- Variant/phrase generation (slice-09)
+
+MOCKUP / REFERENCE: docs/design/admin-retraining.html
+
+HUMAN REVIEW REQUIRED: No"
+SCRUM-32,slice-11-conversation-logs,Task,EPIC-4: Cross-cutting Services + Harden + Demo,slice-11,Sprint 4,Medium,Mitesh,Admissions — Mitesh,module-conversation-store;ui-facing;owner-c,5,"WHAT TO BUILD:
+- GET /api/admin/conversations — role pack from JWT, lists conversations with user_name/email/title/message_count/last_intent/timestamps, filters+pagination
+- GET /api/admin/conversations/:id/messages — read-only transcript, each bot message carries intent_name+confidence; 403 other role pack, 404 missing
+- Conversation Logs page: list -> click to expand full transcript (read-only), per-bot-message intent+confidence, pagination
+
+ACCEPTANCE CRITERIA (convert to checklist in Jira):
+[] Admin GET /api/admin/conversations returns only their role pack's conversations, honouring filters and pagination
+[] GET conversations/:id/messages for a conversation in admin's pack returns full transcript with per-bot-message intent+confidence
+[] Conversation in a different role pack -> 403; missing id -> 404
+[] Non-admin -> 403
+[] Conversation Logs page: list renders, row expands to read-only transcript showing intent+confidence on bot messages; pagination works
+[] Satisfies FR-19 (admin can review their pack's conversation logs)
+
+OUT OF SCOPE:
+- Any editing of conversations (strictly read-only)
+- Audit log (slice-07) and end-user conversation list (slice-04)
+
+MOCKUP / REFERENCE: docs/design/admin-conversation-logs.html
+
+HUMAN REVIEW REQUIRED: No"
+SCRUM-33,slice-15-hr-leave-request,Task,EPIC-3: Write Workflows + Admin + Voice,slice-15,Sprint 3,Medium,PAVAN KISHOR M,HR — Kishor,module-hr-role-pack;ui-facing;owner-a,5,"WHAT TO BUILD:
+- Rasa-HR form for submit_leave_request collecting leave_type, start_date, end_date, reason; option buttons for leave_type; date validation
+- Confirmation step: summary card + Confirm/Cancel (no submission without explicit Confirm)
+- On Confirm: call HRMSAdapter.submit_leave, get reference ID, render result card; fire audit event leave_submitted
+- On Cancel: end workflow cleanly, nothing submitted
+
+ACCEPTANCE CRITERIA (convert to checklist in Jira):
+[] Workflow collects leave_type, start_date, end_date, reason across turns, slots persisting
+[] All slots filled -> confirmation summary with Confirm/Cancel shown before any submission
+[] Confirm -> leave submitted via adapter, result card shows returned reference ID
+[] Cancel -> nothing submitted, workflow ends gracefully
+[] Submission -> audit_log entry (leave_submitted, actor, reference id, details) written (FR-9, safety NFR)
+
+OUT OF SCOPE:
+- Leave balance (slice-14) and policy FAQ (slice-16)
+- Voice / talk mode
+- Admin editing of this workflow's response text (admin console, slice-08)
+
+MOCKUP / REFERENCE: docs/design/chat-view.html
+
+HUMAN REVIEW REQUIRED: No"
+SCRUM-34,slice-16-hr-policy-faq,Task,EPIC-3: Write Workflows + Admin + Voice,slice-16,Sprint 3,Medium,PAVAN KISHOR M,HR — Kishor,module-hr-role-pack;ui-facing;owner-a,5,"WHAT TO BUILD:
+- Seed a few HR policy FAQ intents (static_faq): WFH policy, leave policy — phrases + static templates
+- ask_policy_faq-style classification in Rasa-HR resolving to the right FAQ answer via FAQ-answer component
+- Verify hr_admin can create/edit a policy FAQ through the console (slice-08), scoped to HR, setting needs_retrain
+
+ACCEPTANCE CRITERIA (convert to checklist in Jira):
+[] HR policy question (e.g. WFH policy) -> bot returns the answer via the FAQ-answer component
+[] hr_admin creates a new static FAQ (name+phrases+response) in console -> stored scoped to HR with needs_retrain:true
+[] Low-confidence policy question -> bot asks for clarification rather than answering wrongly (FR-2 upstream)
+[] Default HR policy FAQs exist and are visible in the HR admin Intent List
+
+OUT OF SCOPE:
+- LLM variant generation / Generate Similar (slice-09) and retraining execution (slice-10)
+- Leave balance (slice-14) and leave request (slice-15)
+- IT and Admissions content
+
+MOCKUP / REFERENCE: docs/design/chat-view.html, docs/design/admin-create-edit-intent.html
+
+HUMAN REVIEW REQUIRED: No"
+SCRUM-35,slice-19-it-ticket-create,Task,EPIC-3: Write Workflows + Admin + Voice,slice-19,Sprint 3,Medium,Rohith G.S,IT — Rohith,module-it-role-pack;ui-facing;owner-b,5,"WHAT TO BUILD:
+- Rasa-IT form for raise_ticket collecting category, description (reporter from auth context)
+- Confirmation step (summary + Confirm/Cancel) before creating the record
+- On Confirm: call ITSMAdapter.create_ticket, return ticket ID in result card; fire audit event ticket_created
+- Dedupe (FR-13): record signature of just-created ticket in session; identical immediate repeat returns existing ticket
+
+ACCEPTANCE CRITERIA (convert to checklist in Jira):
+[] Workflow collects category and description across turns
+[] All slots filled -> confirmation with Confirm/Cancel shown before creation
+[] Confirm -> ticket created via adapter, ID shown in result card, audit_log entry (ticket_created) written
+[] Identical create request immediately repeated in same session -> no second ticket created, existing ticket returned (FR-13)
+[] Cancel -> no ticket created
+
+OUT OF SCOPE:
+- Ticket status (slice-20) and password reset (slice-21)
+- Voice / talk mode
+
+MOCKUP / REFERENCE: docs/design/chat-view.html
+
+HUMAN REVIEW REQUIRED: No"
+SCRUM-36,slice-21-it-password-reset,Task,EPIC-3: Write Workflows + Admin + Voice,slice-21,Sprint 3,Medium,Rohith G.S,IT — Rohith,module-it-role-pack;ui-facing;owner-b,5,"WHAT TO BUILD:
+- Rasa-IT flow for reset_password: collect employee_id, then security question + answer
+- Call ITSMAdapter.verify_identity(employee_id, answer)
+- On success: call ITSMAdapter.reset_password, render result message, fire audit event password_reset_initiated
+- On failure: no reset triggered; render error/denied message with guidance; bounded retries
+
+ACCEPTANCE CRITERIA (convert to checklist in Jira):
+[] reset-password intent -> flow asks for employee_id then the security question
+[] Correct security answer -> identity verified, reset triggered, result message shown, audit_log entry (password_reset_initiated) written
+[] Incorrect answer -> reset NOT triggered, user informed, bounded retries
+[] Reset can only fire after successful verification (safety)
+[] No real credential/password value stored or logged — only mock ITSM interactions
+
+OUT OF SCOPE:
+- Ticket create (slice-19) and status (slice-20)
+- Any real password/identity system (mock only)
+- Voice / talk mode
+
+MOCKUP / REFERENCE: docs/design/chat-view.html
+
+HUMAN REVIEW REQUIRED: No"
+SCRUM-37,slice-25-adm-checklist,Task,EPIC-3: Write Workflows + Admin + Voice,slice-25,Sprint 3,Medium,Mitesh,Admissions — Mitesh,module-admissions-role-pack;ui-facing;owner-c,5,"WHAT TO BUILD:
+- Rasa-Admissions intent get_document_checklist with a program slot/entity
+- Custom action calling AdmissionsAdapter.get_document_checklist(program), returning template_key + checklist items
+- Render via shared list component (numbered/bulleted)
+- If no program specified, ask which program (slot prompt); handle unknown programs gracefully
+
+ACCEPTANCE CRITERIA (convert to checklist in Jira):
+[] Given a program, applicant asks for checklist -> bot returns checklist as a list
+[] No program specified -> bot prompts for the program before answering
+[] Unknown program -> graceful not-found (no crash)
+[] Bot response -> persisted bot message records intent + confidence
+
+OUT OF SCOPE:
+- Application status (slice-24) and fee/deadline (slice-26)
+- Voice / talk mode
+
+MOCKUP / REFERENCE: docs/design/chat-view.html
+
+HUMAN REVIEW REQUIRED: No"
+SCRUM-38,slice-26-adm-fee-deadline,Task,EPIC-3: Write Workflows + Admin + Voice,slice-26,Sprint 3,Medium,Mitesh,Admissions — Mitesh,module-admissions-role-pack;ui-facing;owner-c,5,"WHAT TO BUILD:
+- Rasa-Admissions intent ask_fee_deadline resolving fee and deadline questions
+- Custom action calling AdmissionsAdapter.get_calendar() and answering from it; response templates for fee/deadline
+- Confirm calendar is the single source (seed lives in Mock Admissions, slice-23); no fee/deadline data hardcoded in Rasa
+
+ACCEPTANCE CRITERIA (convert to checklist in Jira):
+[] Fee question -> bot returns the fee from the calendar
+[] Deadline question -> bot returns the relevant deadline from the calendar
+[] Change to the calendar (in Mock Admissions) -> bot's answers change accordingly (single configurable source)
+[] Low-confidence question -> bot asks for clarification rather than guessing
+
+OUT OF SCOPE:
+- Application status (slice-24) and document checklist (slice-25)
+- Voice / talk mode
+
+MOCKUP / REFERENCE: docs/design/chat-view.html
+
+HUMAN REVIEW REQUIRED: No"
+SCRUM-39,slice-31-perf-hardening,Task,EPIC-4: Cross-cutting Services + Harden + Demo,slice-31,Sprint 4,Medium,Rohith G.S,Platform — Tahir,module-perf-hardening;infra;owner-d,5,"WHAT TO BUILD:
+- Load/perf test harness simulating 20 concurrent sessions across role packs; measure p95 latency; record in docs/perf-report.md
+- Verify/harden graceful degradation when a mock API is down, and when TTS is unavailable (text fallback)
+- Session recovery: confirm a conversation resumes correctly after a transient backend restart
+- Input validation/sanitization before NLU or persistence
+- Fix issues exposed; log any coverage deliberately skipped
+
+ACCEPTANCE CRITERIA (convert to checklist in Jira):
+[] 20 concurrent sessions -> p95 response time < 2s excluding mock-API delays, documented in docs/perf-report.md
+[] Mock API down -> user gets graceful message, system does not crash (verified per role pack)
+[] TTS unavailable -> talk mode degrades to text
+[] Backend restart mid-conversation -> session resumes with context intact
+[] Malformed or malicious input -> validated/sanitized before NLU or persistence
+
+OUT OF SCOPE:
+- Production-scale tuning beyond the 20-session demo target
+- New features — hardening only
+
+MOCKUP / REFERENCE: No UI surface
+
+HUMAN REVIEW REQUIRED: No"
